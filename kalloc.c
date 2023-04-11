@@ -94,3 +94,20 @@ kalloc(void)
   return (char*)r;
 }
 
+// return how much memory is available in the system
+// added for Homework 5 CS 6460
+// Brandt Redd
+// 11 April 2023
+int
+sys_memtop(void)
+{
+  int mem_avail = 0;
+  struct run *r = kmem.freelist;
+  while (r != 0)
+  {
+    mem_avail += 4096;
+    r = r->next;
+  }
+  return mem_avail;
+}
+
