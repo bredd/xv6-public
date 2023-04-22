@@ -532,3 +532,131 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+// Added by Brandt Redd for HW 6
+
+int
+thread_create(void(*fcn)(void*), void *arg, void *stack)
+{
+  int i;
+  struct proc *np;
+  struct proc *curproc = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Share the page directory and other process info
+  np->pgdir = curproc->pgdir;
+  np->sz = curproc->sz;
+
+  // Set the parent
+  np->parent = curproc;
+
+  // Clone the trapframe
+  *np->tf = *curproc->tf;
+
+  // Copy file descriptors
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  // Copy the proc name
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  // Set up the new thread stack - push the false return address and the argument
+  uint* nsp = (uint*)(((char*)stack) + 4096); // Top of stack is new stack + one page
+  *(--nsp) = (uint)arg;
+  *(--nsp) = 0xffffffff; // False return address
+
+  // Set up the new thread status with the stack and the instruction pointer
+  np->tf->esp = (uint)nsp;
+  np->tf->eip = (uint)fcn;
+  np->tf->eax = 0; // Not really necessary but an acceptable carryover
+
+  // Set the new thread as runnable
+  acquire(&ptable.lock);
+  np->state = RUNNABLE;
+  release(&ptable.lock);
+
+  // Return the new PID
+  return np->pid;
+}
+
+int
+thread_join(void)
+{
+  struct proc *p;
+  int havekids, pid;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited child threads.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if (p->pgdir != curproc->pgdir) // A thread will share the page directory.
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE) {
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack); // Free the kernel stack (not the thread stack)
+        p->kstack = 0;
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed) {
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+int thread_exit(void)
+{
+  struct proc *curproc = myproc();
+  struct proc *p;
+
+  if(curproc == initproc)
+    panic("init exiting");
+
+  // Open files belong to the process, not the thread. So leave them open.
+
+  begin_op();
+  iput(curproc->cwd);
+  end_op();
+  curproc->cwd = 0;
+
+  acquire(&ptable.lock);
+
+  // Parent might be sleeping in wait().
+  wakeup1(curproc->parent);
+
+  // Pass abandoned children to init.
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
+    }
+  }
+
+  // Jump into the scheduler, never to return.
+  curproc->state = ZOMBIE;
+  sched();
+  panic("zombie exit");
+}

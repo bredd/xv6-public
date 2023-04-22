@@ -90,21 +90,34 @@ sys_uptime(void)
   return xticks;
 }
 
+typedef void(*thread_start_fcn)(void*);
+
 // Added by Brandt Redd for HW 6
 int
 sys_thread_create(void)
 {
-  return 0;
+  int fcn;
+  int arg;
+  int stack;
+
+  if(argint(0, &fcn) < 0)
+    return -1;
+  if(argint(1, &arg) < 0)
+    return -1;
+  if(argint(2, &stack) < 0)
+    return -1;
+
+  return thread_create((thread_start_fcn)fcn, (void*)arg, (void*)stack);
 }
 
 int
 sys_thread_join(void)
 {
-  return 0;
+  return thread_join();
 }
 
 int
 sys_thread_exit(void)
 {
-  return 0;
+  return thread_exit();
 }
