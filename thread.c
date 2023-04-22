@@ -7,7 +7,7 @@ struct balance {
     int amount;
 };
 
-struct thread_spinlock lock;
+struct thread_mutex lock;
 
 volatile int total_balance = 0;
 
@@ -28,11 +28,11 @@ void do_work(void *arg){
     printf(1, "Starting do_work: s:%s\n", b->name);
 
     for (i = 0; i < b->amount; i++) { 
-         thread_spin_lock(&lock);
+         thread_mutex_lock(&lock);
          old = total_balance;
          delay(100000);
          total_balance = old + 1;
-         thread_spin_unlock(&lock);
+         thread_mutex_unlock(&lock);
     }
   
     printf(1, "Done s:%s\n", b->name);
@@ -43,7 +43,7 @@ void do_work(void *arg){
 
 int main(int argc, char *argv[]) {
 
-  thread_spin_init(&lock);
+  thread_mutex_init(&lock);
 
   struct balance b1 = {"b1", 3200};
   struct balance b2 = {"b2", 2800};
