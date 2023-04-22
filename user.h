@@ -41,3 +41,14 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+// Added to ulib.c by Brandt Redd for HW 6
+
+struct thread_spinlock
+{
+    uint locked;
+};
+
+void thread_spin_init(struct thread_spinlock *lk);
+void thread_spin_lock(struct thread_spinlock *lk);
+void thread_spin_unlock(struct thread_spinlock *lk);
